@@ -141,13 +141,13 @@ readUntilEmptyLine h = do
          return $ str `B.append` next
 
 parse :: B.ByteString -> Either String Packet
-parse str = toPacket =<< (mapM toPair $ B.lines str)
+parse str = (toPacket . concat) =<< (mapM toPair $ B.lines str)
   where
-    toPair :: B.ByteString -> Either String (B.ByteString, B.ByteString)
+    toPair :: B.ByteString -> Either String [(B.ByteString, B.ByteString)]
     toPair s = case B.split ':' s of
                  []     -> Left "Empty line!?"
-                 [n,v]  -> Right (n, B.dropWhile (== ' ') v)
-                 _      -> Left "More than one colon in packet"
+                 [n,v]  -> Right [(n, B.dropWhile (== ' ') v)]
+                 _      -> Right []
 
     toPacket :: Parameters -> Either String Packet
     toPacket [] = Left "Empty packet!?"
