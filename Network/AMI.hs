@@ -122,7 +122,9 @@ openMD5 info = do
     challenger :: Packet -> AMI ()
     challenger (Response _ "Success" [("Challenge", ch)] _) = do
       let key = B.pack $ show $ md5 $ L.fromChunks [ch `B.append` ciSecret info]
-      sendAction "Login" [("AuthType", "md5"), ("Key", key)] auth
+      sendAction "Login" [("AuthType", "md5"),
+                          ("Username", ciUsername info),
+                          ("Key", key)] auth
     challenger _ = fail "Cannot get challenge for MD5 authentication"
 
     auth :: Packet -> AMI ()
