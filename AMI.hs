@@ -86,14 +86,14 @@ wait = do
     Right p@(Response i t _) -> do
         st <- get
         case M.lookup i (amiResponseHandlers st) of
-          Nothing -> liftIO $ putStrLn $ "No response handler for " ++ show i
+          Nothing -> return ()
           Just handler -> do
                           put $ st {amiResponseHandlers = M.delete i (amiResponseHandlers st)}
                           handler p
     Right (Event t ps) -> do
         m <- gets amiEventHandlers
         case M.lookup t m of
-          Nothing -> liftIO $ putStrLn $ "No event handler for " ++ show t
+          Nothing -> return ()
           Just handler -> handler ps
 
 open :: ConnectInfo -> AMI ()
@@ -101,7 +101,6 @@ open info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
     modify $ \st -> st {amiHandle = Just h}
     s <- liftIO $ B.hGetLine h
-    liftIO $ B.putStrLn $ "Connected to " `B.append` s
     sendAction "Login" [("Username", ciUsername info), ("Secret", ciSecret info)] handleAuth
     wait
   where
@@ -131,9 +130,7 @@ runAMI' z ami = evalStateT ami (AMIState Nothing z M.empty M.empty)
 
 readUntilEmptyLine :: Handle -> IO B.ByteString
 readUntilEmptyLine h = do
-  putStrLn "Read line"
   str <- B.hGetLine h
-  B.putStrLn str
   if (str == "\n") || (str == "\r") || (str == "\r\n")
     then return str
     else do
