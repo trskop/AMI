@@ -127,7 +127,7 @@ openMD5 info = do
 
     auth :: Packet -> AMI ()
     auth (Response _ "Success" _ _) = return ()
-    auth _ = fail "MD5 authentication failed"
+    auth x = fail $ "MD5 authentication failed: " ++ show x
 
 close :: AMI ()
 close = do
