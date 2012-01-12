@@ -86,14 +86,14 @@ wait = do
     Right p@(Response i t _) -> do
         st <- get
         case M.lookup i (amiResponseHandlers st) of
-          Nothing -> return ()
+          Nothing -> liftIO $ putStrLn $ "No response handler for " ++ show i
           Just handler -> do
                           put $ st {amiResponseHandlers = M.delete i (amiResponseHandlers st)}
                           handler p
     Right (Event t ps) -> do
         m <- gets amiEventHandlers
         case M.lookup t m of
-          Nothing -> return ()
+          Nothing -> liftIO $ putStrLn $ "No event handler for " ++ show t
           Just handler -> handler ps
 
 open :: ConnectInfo -> AMI ()
