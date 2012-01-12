@@ -14,16 +14,16 @@ main = runAMI $ do
   liftIO $ putStrLn "Open ok"
   handleEvent "FullyBooted" onBooted
   liftIO $ putStrLn "Set event handler ok"
-  sendAction "Queues" [] queuesHandler
+  sendAction "MailboxCount" [("Mailbox","900")] cmdHandler
   wait
   wait
-  liftIO $ putStrLn "Queues ok"
+  liftIO $ putStrLn "Command ok"
   close
 
 onBooted ps = liftIO $ do
   putStrLn "Asterisk is fully booted."
   print ps
 
-queuesHandler p = liftIO $ do
-  putStrLn "Answer for Queues:"
+cmdHandler p = liftIO $ do
+  putStrLn "Answer for command:"
   print p
