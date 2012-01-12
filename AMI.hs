@@ -144,7 +144,7 @@ linesB y = h : if B.null t then [] else linesB (B.drop 2 t)
    where (h,t) = B.breakSubstring "\r\n" y
 
 parse :: B.ByteString -> Either String Packet
-parse str = (toPacket . concat) =<< (mapM toPair $ linesB str)
+parse str = (toPacket . concat) =<< (mapM toPair $ B.split '\r' str)
   where
     toPair :: B.ByteString -> Either String [(B.ByteString, B.ByteString)]
     toPair s = case B.split ':' s of
