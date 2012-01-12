@@ -86,20 +86,21 @@ wait = do
     Right p@(Response i t _) -> do
         st <- get
         case M.lookup i (amiResponseHandlers st) of
-          Nothing -> liftIO $ putStrLn $ "No response handler for " ++ show i
+          Nothing -> return ()
           Just handler -> do
                           put $ st {amiResponseHandlers = M.delete i (amiResponseHandlers st)}
                           handler p
     Right (Event t ps) -> do
         m <- gets amiEventHandlers
         case M.lookup t m of
-          Nothing -> liftIO $ putStrLn $ "No event handler for " ++ show t
+          Nothing -> return ()
           Just handler -> handler ps
 
 open :: ConnectInfo -> AMI ()
 open info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
     modify $ \st -> st {amiHandle = Just h}
+    s <- liftIO $ B.hGetLine h
     sendAction "Login" [("Username", ciUsername info), ("Secret", ciSecret info)] handleAuth
     wait
   where
@@ -114,7 +115,11 @@ close = do
   modify $ \st -> st {amiHandle = Nothing}
 
 sendPacket :: Handle -> Packet -> IO ()
-sendPacket h p = B.hPutStrLn h (format p)
+sendPacket h p = do
+  let s = format p `B.append` "\r\n"
+  B.hPutStr h s
+  B.hPutStr h "\r\n"
+  hFlush h
 
 runAMI :: AMI a -> IO a
 runAMI ami = evalStateT ami (AMIState Nothing 0 M.empty M.empty)
@@ -131,14 +136,17 @@ readUntilEmptyLine h = do
          next <- readUntilEmptyLine h
          return $ str `B.append` next
 
+linesB y = h : if B.null t then [] else linesB (B.drop 2 t)
+   where (h,t) = B.breakSubstring "\r\n" y
+
 parse :: B.ByteString -> Either String Packet
-parse str = toPacket =<< (mapM toPair $ B.lines str)
+parse str = (toPacket . concat) =<< (mapM toPair $ B.split '\r' str)
   where
-    toPair :: B.ByteString -> Either String (B.ByteString, B.ByteString)
+    toPair :: B.ByteString -> Either String [(B.ByteString, B.ByteString)]
     toPair s = case B.split ':' s of
-                 []     -> Left "Empty line!?"
-                 [n,v]  -> Right (n, B.dropWhile (== ' ') v)
-                 _      -> Left "More than one colon in packet"
+                 []     -> Right []
+                 [n,v]  -> Right [(n, B.dropWhile (== ' ') v)]
+                 x      -> Left $ "Unexpected: " ++ show x
 
     toPacket :: Parameters -> Either String Packet
     toPacket [] = Left "Empty packet!?"
@@ -173,7 +181,7 @@ format (Response i name ps) = formatParams $ [("Response", name), ("ActionID", i
 format (Event name ps)      = formatParams $ [("Event", name)] ++ ps
 
 formatParams :: Parameters -> B.ByteString
-formatParams pairs = B.unlines $ map one pairs
+formatParams pairs = B.intercalate "\r\n" $ map one pairs
   where
     one (k,v) = k `B.append` ": " `B.append` v
 
