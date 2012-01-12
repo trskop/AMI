@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module AMI where
+module Network.AMI where
 
 import Control.Monad
 import Control.Monad.Trans

@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Monad.Trans
 
-import AMI
+import Network.AMI
 
 info = ConnectInfo {
          ciHost = "localhost",
