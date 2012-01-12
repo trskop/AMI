@@ -7,7 +7,7 @@ Synopsis:            Low-level bindings for Asterisk Manager Interface (AMI).
 Description:         This package provides simple low-level bindings for
                      Asterisk Manager Interface (AMI).
 
-Homepage:            http://redmine.iportnov.ru/projects/AMI
+Homepage:            http://redmine.iportnov.ru/projects/ami
 
 License:             BSD3
 
@@ -39,4 +39,7 @@ Library
   
   -- Extra tools (e.g. alex, hsc2hs, ...) needed to build the source.
   -- Build-tools:         
-  
+
+Source-repository head
+  type: git
+  location: git://home.iportnov.ru/AMI.git
