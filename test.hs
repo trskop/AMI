@@ -17,6 +17,7 @@ main = runAMI $ do
   sendAction "MailboxCount" [("Mailbox","900")] cmdHandler
   wait
   wait
+  sendAction "Queues" [] cmdHandler
   liftIO $ putStrLn "Command ok"
   close
 

@@ -152,7 +152,7 @@ parse str = uncurry toPacket =<< (toPairs [] $ B.split '\r' str)
       case B.split ':' s of
         []     -> return (acc, [])
         [n,v]  -> let new = (n, B.dropWhile (== ' ') v)
-                  in  toPairs (new:acc) ss
+                  in  toPairs (acc ++ [new]) ss
         x      -> Right (acc, (s:ss))
 
     toPacket :: Parameters -> [B.ByteString] -> Either String Packet
