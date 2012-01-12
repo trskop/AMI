@@ -148,7 +148,7 @@ parse str = (toPacket . concat) =<< (mapM toPair $ B.split '\r' str)
   where
     toPair :: B.ByteString -> Either String [(B.ByteString, B.ByteString)]
     toPair s = case B.split ':' s of
-                 []     -> Left "Empty line!?"
+                 []     -> Right []
                  [n,v]  -> Right [(n, B.dropWhile (== ' ') v)]
                  x      -> Left $ "Unexpected: " ++ show x
 
