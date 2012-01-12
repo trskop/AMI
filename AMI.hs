@@ -147,7 +147,7 @@ parse str = (toPacket . concat) =<< (mapM toPair $ B.lines str)
     toPair s = case B.split ':' s of
                  []     -> Left "Empty line!?"
                  [n,v]  -> Right [(n, B.dropWhile (== ' ') v)]
-                 _      -> Right []
+                 x      -> Left $ "Unexpected: " ++ show x
 
     toPacket :: Parameters -> Either String Packet
     toPacket [] = Left "Empty packet!?"
