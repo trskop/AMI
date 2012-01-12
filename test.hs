@@ -10,7 +10,7 @@ info = ConnectInfo {
          ciSecret = "M%nit%r" }
 
 main = runAMI $ do
-  open info
+  openMD5 info
   liftIO $ putStrLn "Open ok"
   handleEvent "FullyBooted" onBooted
   liftIO $ putStrLn "Set event handler ok"

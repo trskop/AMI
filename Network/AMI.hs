@@ -7,6 +7,8 @@ import Control.Monad.Instances
 import Control.Monad.State
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
+import qualified Data.ByteString.Lazy as L
+import Data.Digest.Pure.MD5
 import Network
 import Network.Socket
 import System.IO
@@ -108,6 +110,24 @@ open info = do
     handleAuth :: Packet -> AMI ()
     handleAuth (Response _ "Success" _ _) = return ()
     handleAuth _ = fail "Authentication failed"
+
+openMD5 :: ConnectInfo -> AMI ()
+openMD5 info = do
+    h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
+    modify $ \st -> st {amiHandle = Just h}
+    s <- liftIO $ B.hGetLine h
+    sendAction "Challenge" [("AuthType", "md5")] challenger
+    wait
+  where
+    challenger :: Packet -> AMI ()
+    challenger (Response _ "Success" [("Challenge", ch)] _) = do
+      let key = B.pack $ show $ md5 $ L.fromChunks [ch `B.append` ciSecret info]
+      sendAction "Login" [("AuthType", "md5"), ("Key", key)] auth
+    challenger _ = fail "Cannot get challenge for MD5 authentication"
+
+    auth :: Packet -> AMI ()
+    auth (Response _ "Success" _ _) = return ()
+    auth _ = fail "MD5 authentication failed"
 
 close :: AMI ()
 close = do
