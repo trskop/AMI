@@ -111,6 +111,8 @@ open info = do
 
 close :: AMI ()
 close = do
+  sendAction "Logoff" [] (const $ return ())
+  wait
   h <- getHandle
   liftIO $ hClose h
   modify $ \st -> st {amiHandle = Nothing}
