@@ -1,5 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Network.AMI where
+module Network.AMI
+  (Packet (..),
+   ConnectInfo (..),
+   open, openMD5,
+   close,
+   withAMI, withAMI_MD5,
+   runAMI, runAMI',
+   sendAction,
+   handleEvent,
+   wait
+  ) where
 
 import Control.Monad
 import Control.Monad.Trans
@@ -27,6 +37,7 @@ type EventHandler = Parameters -> AMI ()
 
 type ResponseHandler = Packet -> AMI ()
 
+-- | Any AMI packet
 data Packet =
     Action ActionID ActionType Parameters
   | Response ActionID ResponseType Parameters [B.ByteString]
@@ -39,6 +50,7 @@ data AMIState = AMIState {
   amiResponseHandlers :: M.Map ActionID ResponseHandler,
   amiEventHandlers :: M.Map EventType EventHandler }
 
+-- | Info needed to connect and authenticate in Asterisk
 data ConnectInfo = ConnectInfo {
   ciHost :: String,
   ciPort :: Int,
@@ -46,8 +58,10 @@ data ConnectInfo = ConnectInfo {
   ciSecret :: B.ByteString }
   deriving (Eq, Show)
 
+-- | The AMI monad
 type AMI a = StateT AMIState IO a
 
+-- | Return next ActionID
 inc :: AMI ActionID
 inc = do
   st <- get
@@ -55,6 +69,7 @@ inc = do
   put $ st {amiActionID = n}
   return (B.pack $ show n)
 
+-- | Get connection handle
 getHandle :: AMI Handle
 getHandle = do
   mbh <- gets amiHandle
@@ -62,11 +77,13 @@ getHandle = do
     Nothing -> fail "Connection is not opened"
     Just h -> return h
 
+-- | Add an event handler
 handleEvent :: EventType -> EventHandler -> AMI ()
 handleEvent t handler = modify add
   where
     add st = st {amiEventHandlers = M.insert t handler (amiEventHandlers st)}
 
+-- | Send an Action packet and install a handler for the anser
 sendAction :: ActionType -> Parameters -> ResponseHandler -> AMI ()
 sendAction t ps handler = do
     i <- inc
@@ -78,6 +95,7 @@ sendAction t ps handler = do
       hdlr p
       modify $ \st -> st {amiResponseHandlers = M.delete i (amiResponseHandlers st)}
 
+-- | Wait for (one) response or event
 wait :: AMI ()
 wait = do
   h <- getHandle
@@ -99,6 +117,7 @@ wait = do
           Nothing -> return ()
           Just handler -> handler ps
 
+-- | Open a connection to Asterisk and authenticate
 open :: ConnectInfo -> AMI ()
 open info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
@@ -111,6 +130,7 @@ open info = do
     handleAuth (Response _ "Success" _ _) = return ()
     handleAuth _ = fail "Authentication failed"
 
+-- | Open a connection to Asterisk and authenticate using MD5 challenge
 openMD5 :: ConnectInfo -> AMI ()
 openMD5 info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
@@ -131,6 +151,7 @@ openMD5 info = do
     auth (Response _ "Success" _ _) = return ()
     auth x = fail $ "MD5 authentication failed: " ++ show x
 
+-- | Close Asterisk connection
 close :: AMI ()
 close = do
   sendAction "Logoff" [] (const $ return ())
@@ -139,6 +160,23 @@ close = do
   liftIO $ hClose h
   modify $ \st -> st {amiHandle = Nothing}
 
+-- | Connect, execute acions, disconnect
+withAMI :: ConnectInfo -> AMI a -> IO a
+withAMI info ami = runAMI $ do
+    open info
+    r <- ami
+    close
+    return r
+
+-- | Connect (using MD5 challenge), execute acions, disconnect
+withAMI_MD5 :: ConnectInfo -> AMI a -> IO a
+withAMI_MD5 info ami = runAMI $ do
+    openMD5 info
+    r <- ami
+    close
+    return r
+
+-- | Send one AMI packet
 sendPacket :: Handle -> Packet -> IO ()
 sendPacket h p = do
   let s = format p `B.append` "\r\n"
@@ -146,9 +184,11 @@ sendPacket h p = do
   B.hPutStr h "\r\n"
   hFlush h
 
+-- | Run AMI actions
 runAMI :: AMI a -> IO a
 runAMI ami = evalStateT ami (AMIState Nothing 0 M.empty M.empty)
 
+-- | Run AMI actions, starting with given ActionID
 runAMI' :: Integer -> AMI a -> IO a
 runAMI' z ami = evalStateT ami (AMIState Nothing z M.empty M.empty)
 
@@ -164,6 +204,7 @@ readUntilEmptyLine h = do
 linesB y = h : if B.null t then [] else linesB (B.drop 2 t)
    where (h,t) = B.breakSubstring "\r\n" y
 
+-- | Parse packet
 parse :: B.ByteString -> Either String Packet
 parse str = uncurry toPacket =<< (toPairs [] $ B.split '\r' str)
   where

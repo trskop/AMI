@@ -32,7 +32,8 @@ Cabal-version:       >=1.6
 Library
   Exposed-modules:     Network.AMI
   
-  Build-depends:       base >= 4 && < 5, containers, mtl, network, bytestring
+  Build-depends:       base >= 4 && < 5, containers, mtl, network, bytestring,
+                       pureMD5
   
   -- Modules not exported by this package.
   -- Other-modules:       
