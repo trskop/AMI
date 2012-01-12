@@ -117,7 +117,6 @@ close = do
 sendPacket :: Handle -> Packet -> IO ()
 sendPacket h p = do
   let s = format p `B.append` "\r\n"
-  print s
   B.hPutStr h s
   B.hPutStr h "\r\n"
   hFlush h
