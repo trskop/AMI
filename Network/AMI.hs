@@ -156,7 +156,7 @@ parse str = uncurry toPacket =<< (toPairs [] $ B.split '\r' str)
         x      -> Right (acc, (s:ss))
 
     toPacket :: Parameters -> [B.ByteString] -> Either String Packet
-    toPacket [] _ = Left "Empty packet!?"
+    toPacket [] text = Right $ Response "" "text" [] text
     toPacket ((k,v):pairs) text =
       case k of
         "Action"   -> toAction   v pairs
