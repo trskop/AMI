@@ -86,9 +86,10 @@ wait = do
     Right p@(Response i t _) -> do
         st <- get
         case M.lookup i (amiResponseHandlers st) of
-          Nothing -> return ()
+          Nothing -> liftIO $ putStrLn $ "No handler for " ++ show i
           Just handler -> do
                           put $ st {amiResponseHandlers = M.delete i (amiResponseHandlers st)}
+                          liftIO $ putStrLn $ "Calling handler for " ++ show i
                           handler p
     Right (Event t ps) -> do
         m <- gets amiEventHandlers
