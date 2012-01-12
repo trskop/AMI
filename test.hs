@@ -11,9 +11,14 @@ info = ConnectInfo {
 
 main = runAMI $ do
   open info
+  handleEvent "FullyBooted" onBooted
   sendAction "Queues" [] queuesHandler
   wait
   close
+
+onBooted ps = liftIO $ do
+  putStrLn "Asterisk is fully booted."
+  print ps
 
 queuesHandler p =
   liftIO $ print p
