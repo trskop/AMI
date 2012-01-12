@@ -100,7 +100,8 @@ open :: ConnectInfo -> AMI ()
 open info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
     modify $ \st -> st {amiHandle = Just h}
-    liftIO $ B.hGetLine h
+    s <- liftIO $ B.hGetLine h
+    liftIO $ B.putStrLn $ "Connected to " `B.append` s
     sendAction "Login" [("Username", ciUsername info), ("Secret", ciSecret info)] handleAuth
     wait
   where
@@ -115,7 +116,12 @@ close = do
   modify $ \st -> st {amiHandle = Nothing}
 
 sendPacket :: Handle -> Packet -> IO ()
-sendPacket h p = B.hPutStrLn h (format p)
+sendPacket h p = do
+  let s = format p `B.append` "\r\n"
+  print s
+  B.hPutStr h s
+  B.hPutStr h "\r\n"
+  hFlush h
 
 runAMI :: AMI a -> IO a
 runAMI ami = evalStateT ami (AMIState Nothing 0 M.empty M.empty)
@@ -125,7 +131,9 @@ runAMI' z ami = evalStateT ami (AMIState Nothing z M.empty M.empty)
 
 readUntilEmptyLine :: Handle -> IO B.ByteString
 readUntilEmptyLine h = do
+  putStrLn "Read line"
   str <- B.hGetLine h
+  B.putStrLn str
   if (str == "\n") || (str == "\r") || (str == "\r\n")
     then return str
     else do
@@ -174,7 +182,7 @@ format (Response i name ps) = formatParams $ [("Response", name), ("ActionID", i
 format (Event name ps)      = formatParams $ [("Event", name)] ++ ps
 
 formatParams :: Parameters -> B.ByteString
-formatParams pairs = B.unlines $ map one pairs
+formatParams pairs = B.intercalate "\r\n" $ map one pairs
   where
     one (k,v) = k `B.append` ": " `B.append` v
 
