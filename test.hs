@@ -18,7 +18,12 @@ main = runAMI $ do
   wait
   wait
   sendAction "Queues" [] cmdHandler
-  liftIO $ putStrLn "Command ok"
+  wait
+  sendAction "JabberSend" [("Jabber", "asterisk"),
+                           ("JID", "portnov@free-alt.ru"),
+                           ("ScreenName", "asterisk"),
+                           ("Message", "Jabber via AMI")] cmdHandler
+  wait
   close
 
 onBooted ps = liftIO $ do
