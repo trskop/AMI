@@ -100,6 +100,7 @@ open :: ConnectInfo -> AMI ()
 open info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
     modify $ \st -> st {amiHandle = Just h}
+    liftIO $ B.hGetLine h
     sendAction "Login" [("Username", ciUsername info), ("Secret", ciSecret info)] handleAuth
     wait
   where
