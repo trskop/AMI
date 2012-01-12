@@ -140,8 +140,11 @@ readUntilEmptyLine h = do
          next <- readUntilEmptyLine h
          return $ str `B.append` next
 
+linesB y = h : if B.null t then [] else linesB (B.drop 2 t)
+   where (h,t) = B.breakSubstring "\r\n" y
+
 parse :: B.ByteString -> Either String Packet
-parse str = (toPacket . concat) =<< (mapM toPair $ B.lines str)
+parse str = (toPacket . concat) =<< (mapM toPair $ linesB str)
   where
     toPair :: B.ByteString -> Either String [(B.ByteString, B.ByteString)]
     toPair s = case B.split ':' s of
