@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Control.Monad.Trans
+import Control.Concurrent
 
 import Network.AMI
 
@@ -9,7 +10,12 @@ info = ConnectInfo {
          ciUsername = "monitor",
          ciSecret = "M%nit%r" }
 
-main = withAMI_MD5 info $ do
+main = do
+  forkIO test
+  threadDelay 150
+  test
+
+test = withAMI_MD5 info $ do
   handleEvent "FullyBooted" onBooted
   mail <- query "MailboxCount" [("Mailbox","900")]
   liftIO $ print mail
