@@ -9,8 +9,7 @@ info = ConnectInfo {
          ciUsername = "monitor",
          ciSecret = "M%nit%r" }
 
-main = runAMI $ do
-  openMD5 info
+main = withAMI_MD5 info $ do
   liftIO $ putStrLn "Open ok"
   handleEvent "FullyBooted" onBooted
   liftIO $ putStrLn "Set event handler ok"
@@ -24,7 +23,6 @@ main = runAMI $ do
                            ("ScreenName", "asterisk"),
                            ("Message", "Jabber via AMI")] cmdHandler
   wait
-  close
 
 onBooted ps = liftIO $ do
   putStrLn "Asterisk is fully booted."

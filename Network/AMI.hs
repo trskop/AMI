@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Network.AMI
-  (Packet (..),
+  (Parameters,
+   ActionType, EventType,
+   ActionID, ResponseType,
+   EventHandler, ResponseHandler,
+   Packet (..),
    ConnectInfo (..),
    open, openMD5,
    close,
@@ -106,10 +110,9 @@ wait = do
     Right p@(Response i t _ _) -> do
         st <- get
         case M.lookup i (amiResponseHandlers st) of
-          Nothing -> liftIO $ putStrLn $ "No handler for " ++ show i
+          Nothing -> return ()
           Just handler -> do
                           put $ st {amiResponseHandlers = M.delete i (amiResponseHandlers st)}
-                          liftIO $ putStrLn $ "Calling handler for " ++ show i
                           handler p
     Right (Event t ps) -> do
         m <- gets amiEventHandlers
