@@ -118,10 +118,6 @@ query t ps = do
       let resps = M.insert i Nothing (amiResponses st)
       writeTVar var $ st {amiResponses = resps}
 
-  -- За счет unsafePerformIO сам забор ответа произойдет только в момент вычисления
-  -- значения, лениво. Единственное но: надо следить за утечками, потому что если значение
-  -- не будет вычислено, то ответ так и будет лежать в мапе. Имеет смысл прикрепить
-  -- финализатор к значению, короче.
   return $ unsafePerformIO $ atomically $ do 
     st <- readTVar var
     let resps = amiResponses st
@@ -133,20 +129,22 @@ query t ps = do
       Nothing -> fail $ "There was no response for Action " ++ show i
 
 -- | Open a connection to Asterisk and authenticate
-open :: ConnectInfo -> AMI ()
+open :: ConnectInfo -> AMI ThreadId
 open info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
+    t <- forkAnswersReader h
     modifyAMI $ \st -> st {amiHandle = Just h}
     s <- liftIO $ B.hGetLine h
     auth <- query "Login" [("Username", ciUsername info), ("Secret", ciSecret info)]
     case auth of
-      Response _ "Success" _ _ -> return ()
+      Response _ "Success" _ _ -> return t
       _ -> fail "Authentication failed"
 
 -- | Open a connection to Asterisk and authenticate using MD5 challenge
-openMD5 :: ConnectInfo -> AMI ()
+openMD5 :: ConnectInfo -> AMI ThreadId
 openMD5 info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
+    t <- forkAnswersReader h
     modifyAMI $ \st -> st {amiHandle = Just h}
     s <- liftIO $ B.hGetLine h
     chp <- query "Challenge" [("AuthType", "md5")]
@@ -157,7 +155,7 @@ openMD5 info = do
                             ("Username", ciUsername info),
                             ("Key", key)]
         case auth of
-          Response _ "Success" _ _ -> return ()
+          Response _ "Success" _ _ -> return t
           x -> fail $ "MD5 authentication failed: " ++ show x
       _ -> fail "Cannot get challenge for MD5 authentication"
 
@@ -172,8 +170,7 @@ close = do
 -- | Connect, execute acions, disconnect
 withAMI :: ConnectInfo -> AMI a -> IO a
 withAMI info ami = runAMI $ do
-    open info
-    t <- forkAnswersReader
+    t <- open info
     r <- ami
     liftIO $ killThread t
     close
@@ -182,8 +179,7 @@ withAMI info ami = runAMI $ do
 -- | Connect (using MD5 challenge), execute acions, disconnect
 withAMI_MD5 :: ConnectInfo -> AMI a -> IO a
 withAMI_MD5 info ami = runAMI $ do
-    openMD5 info
-    t <- forkAnswersReader
+    t <- openMD5 info
     r <- ami
     liftIO $ killThread t
     close
@@ -212,9 +208,8 @@ readUntilEmptyLine h = do
          next <- readUntilEmptyLine h
          return $ str `B.append` next
 
-forkAnswersReader :: AMI ThreadId
-forkAnswersReader = do
-    h <- getHandle
+forkAnswersReader :: Handle -> AMI ThreadId
+forkAnswersReader h = do
     var <- ask
     liftIO $ forkIO (forever $ reader h var)
   where
