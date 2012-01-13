@@ -10,9 +10,7 @@ info = ConnectInfo {
          ciSecret = "M%nit%r" }
 
 main = withAMI_MD5 info $ do
-  liftIO $ putStrLn "Open ok"
   handleEvent "FullyBooted" onBooted
-  liftIO $ putStrLn "Set event handler ok"
   mail <- query "MailboxCount" [("Mailbox","900")]
   liftIO $ print mail
   jabber <- query "JabberSend" [("Jabber", "asterisk"),

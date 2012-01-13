@@ -33,7 +33,7 @@ Library
   Exposed-modules:     Network.AMI
   
   Build-depends:       base >= 4 && < 5, containers, mtl, network, bytestring,
-                       pureMD5
+                       pureMD5, stm
   
   -- Modules not exported by this package.
   -- Other-modules:       
@@ -44,3 +44,4 @@ Library
 Source-repository head
   type: git
   location: git://home.iportnov.ru/AMI.git
+
