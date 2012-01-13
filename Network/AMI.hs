@@ -173,7 +173,9 @@ close = do
 withAMI :: ConnectInfo -> AMI a -> IO a
 withAMI info ami = runAMI $ do
     open info
+    t <- forkAnswersReader
     r <- ami
+    liftIO $ killThread t
     close
     return r
 
@@ -181,7 +183,9 @@ withAMI info ami = runAMI $ do
 withAMI_MD5 :: ConnectInfo -> AMI a -> IO a
 withAMI_MD5 info ami = runAMI $ do
     openMD5 info
+    t <- forkAnswersReader
     r <- ami
+    liftIO $ killThread t
     close
     return r
 
