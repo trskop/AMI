@@ -37,7 +37,7 @@ type ActionID = Integer
 
 type ResponseType = B.ByteString
 
-type EventHandler = Parameters -> AMI ()
+type EventHandler = Parameters -> IO ()
 
 -- | Any AMI packet
 data Packet =
@@ -114,15 +114,19 @@ query t ps = do
       let resps = M.insert i Nothing (amiResponses st)
       writeTVar var $ st {amiResponses = resps}
 
-  return $ unsafePerformIO $ atomically $ do 
-    st <- readTVar var
-    let resps = amiResponses st
-    case M.lookup i resps of
-      Just (Just a) -> do
-         writeTVar var $ st {amiResponses = M.delete i resps}
-         return a
-      Just (Nothing) -> retry
-      Nothing -> fail $ "There was no response for Action " ++ show i
+  h <- getHandle
+  liftIO $ sendPacket h (Action i t ps)
+  return $ unsafePerformIO $ do
+    st <- atomically $ readTVar var
+    atomically $ do 
+      st <- readTVar var
+      let resps = amiResponses st
+      case M.lookup i resps of
+        Just (Just a) -> do
+           writeTVar var $ st {amiResponses = M.delete i resps}
+           return a
+        Just (Nothing) -> retry
+        Nothing -> fail $ "There was no response for Action " ++ show i
 
 -- | Open a connection to Asterisk and authenticate
 open :: ConnectInfo -> AMI ThreadId
@@ -140,9 +144,9 @@ open info = do
 openMD5 :: ConnectInfo -> AMI ThreadId
 openMD5 info = do
     h <- liftIO $ connectTo (ciHost info) (PortNumber $ fromIntegral $ ciPort info)
+    s <- liftIO $ B.hGetLine h
     t <- forkAnswersReader h
     modifyAMI $ \st -> st {amiHandle = Just h}
-    s <- liftIO $ B.hGetLine h
     chp <- query "Challenge" [("AuthType", "md5")]
     case chp of
       Response _ "Success" [("Challenge", ch)] _ -> do
@@ -156,20 +160,21 @@ openMD5 info = do
       _ -> fail "Cannot get challenge for MD5 authentication"
 
 -- | Close Asterisk connection
-close :: AMI ()
-close = do
+close :: ThreadId -> AMI ()
+close t = do
   !x <- query "Logoff" [] 
   h <- getHandle
-  liftIO $ hClose h
   modifyAMI $ \st -> st {amiHandle = Nothing}
+  rs <- getAMI amiResponses
+  liftIO $ killThread t
+  liftIO $ hClose h
 
 -- | Connect, execute acions, disconnect
 withAMI :: ConnectInfo -> AMI a -> IO a
 withAMI info ami = runAMI $ do
     t <- open info
     r <- ami
-    liftIO $ killThread t
-    close
+    close t
     return r
 
 -- | Connect (using MD5 challenge), execute acions, disconnect
@@ -177,8 +182,7 @@ withAMI_MD5 :: ConnectInfo -> AMI a -> IO a
 withAMI_MD5 info ami = runAMI $ do
     t <- openMD5 info
     r <- ami
-    liftIO $ killThread t
-    close
+    close t
     return r
 
 -- | Send one AMI packet
@@ -207,7 +211,8 @@ readUntilEmptyLine h = do
 forkAnswersReader :: Handle -> AMI ThreadId
 forkAnswersReader h = do
     var <- ask
-    liftIO $ forkIO (forever $ reader h var)
+    liftIO $ forkIO $ do
+      forever $ reader h var
   where
     reader :: Handle -> TVar AMIState -> IO ()
     reader h var = do
@@ -216,10 +221,16 @@ forkAnswersReader h = do
         Left err -> do
                     putStrLn $ "Error parsing answer: " ++ err
                     return ()
-        Right p@(Response i _ _ _) -> atomically $ do
+        Right p@(Response i _ _ _) -> do
+          atomically $ do
             st <- readTVar var
             let resps = M.insert i (Just p) (amiResponses st)
             writeTVar var $ st {amiResponses = resps}
+        Right p@(Event t ps) -> do
+            st <- atomically $ readTVar var
+            case M.lookup t (amiEventHandlers st) of
+              Nothing -> return ()
+              Just handler -> handler ps
 
 linesB y = h : if B.null t then [] else linesB (B.drop 2 t)
    where (h,t) = B.breakSubstring "\r\n" y
