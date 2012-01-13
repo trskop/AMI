@@ -3,13 +3,10 @@ module Network.AMI
   (Parameters,
    ActionType, EventType,
    ActionID, ResponseType,
-   EventHandler, ResponseHandler,
+   EventHandler,
    Packet (..),
    ConnectInfo (..),
-   open, openMD5,
-   close,
    withAMI, withAMI_MD5,
-   runAMI,
    query,
    handleEvent
   ) where
@@ -20,6 +17,7 @@ import Control.Monad.Instances
 import Control.Monad.Reader
 import Control.Concurrent
 import Control.Concurrent.STM
+import qualified Control.Exception as E
 import qualified Data.Map as M
 import qualified Data.ByteString.Char8 as B
 import qualified Data.ByteString.Lazy as L
@@ -40,8 +38,6 @@ type ActionID = Integer
 type ResponseType = B.ByteString
 
 type EventHandler = Parameters -> AMI ()
-
-type ResponseHandler = Packet -> AMI ()
 
 -- | Any AMI packet
 data Packet =
@@ -201,7 +197,7 @@ runAMI ami = do
 
 readUntilEmptyLine :: Handle -> IO B.ByteString
 readUntilEmptyLine h = do
-  str <- B.hGetLine h
+  str <- B.hGetLine h `E.catch` \(E.SomeException _) -> return "\n"
   if (str == "\n") || (str == "\r") || (str == "\r\n")
     then return str
     else do
