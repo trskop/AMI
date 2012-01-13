@@ -13,21 +13,14 @@ main = withAMI_MD5 info $ do
   liftIO $ putStrLn "Open ok"
   handleEvent "FullyBooted" onBooted
   liftIO $ putStrLn "Set event handler ok"
-  sendAction "MailboxCount" [("Mailbox","900")] cmdHandler
-  wait
-  wait
-  sendAction "Queues" [] cmdHandler
-  wait
-  sendAction "JabberSend" [("Jabber", "asterisk"),
+  mail <- query "MailboxCount" [("Mailbox","900")]
+  liftIO $ print mail
+  jabber <- query "JabberSend" [("Jabber", "asterisk"),
                            ("JID", "portnov@free-alt.ru"),
                            ("ScreenName", "asterisk"),
-                           ("Message", "Jabber via AMI")] cmdHandler
-  wait
+                           ("Message", "Jabber via AMI")]
+  liftIO $ print jabber
 
 onBooted ps = liftIO $ do
   putStrLn "Asterisk is fully booted."
   print ps
-
-cmdHandler p = liftIO $ do
-  putStrLn "Answer for command:"
-  print p
