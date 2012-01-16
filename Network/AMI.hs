@@ -16,7 +16,8 @@ module Network.AMI
    -- * Functions
    withAMI, withAMI_MD5,
    query,
-   handleEvent
+   handleEvent,
+   waitListEvents
   ) where
 
 import Control.Monad
@@ -151,6 +152,28 @@ handleEvent :: EventType -> EventHandler -> AMI ()
 handleEvent t handler = modifyAMI add
   where
     add st = st {amiEventHandlers = M.insert t handler (amiEventHandlers st)}
+
+waitListEvents :: EventType            -- ^ Event with next item
+               -> EventType            -- ^ Event which signals end of list
+               -> (Parameters -> IO a) -- ^ Function to apply to each item event
+               -> AMI [a]
+waitListEvents item end fn = do
+    done <- liftIO $ atomically $ newEmptyTMVar
+    list <- liftIO $ atomically $ newTVar []
+    handleEvent item (handleItem list)
+    handleEvent end  (handleEnd done)
+    liftIO $ atomically $ takeTMVar done
+    res <- liftIO $ atomically $ readTVar list
+    return res
+  where
+    handleItem var ps = do
+      val <- fn ps
+      atomically $ do
+          old <- readTVar var
+          writeTVar var (old ++ [val])
+
+    handleEnd var _ = do
+      atomically $ putTMVar var ()
 
 -- | Send an Action packet and return the response.
 --
