@@ -9,6 +9,8 @@ Description:         This package provides simple low-level bindings for
 
 Homepage:            http://redmine.iportnov.ru/projects/ami
 
+bug-reports: http://redmine.iportnov.ru/projects/ami
+
 License:             BSD3
 
 License-file:        LICENSE
