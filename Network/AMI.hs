@@ -57,18 +57,19 @@ data Event = Event EventType Parameters
 
 -- | AMI monad internal state
 data AMIState = AMIState {
-  amiHandle :: Maybe Handle,
-  amiActionID :: ActionID,
-  amiResponses :: M.Map ActionID (Maybe Response),
-  amiEventHandlers :: M.Map EventType EventHandler }
+    amiHandle :: Maybe Handle                        -- ^ Handle for socket of Asterisk connection
+  , amiActionID :: ActionID                          -- ^ ActionID of last action
+  , amiResponses :: M.Map ActionID (Maybe Response)  -- ^ Responses for sent actions
+  , amiEventHandlers :: M.Map EventType EventHandler -- ^ Event handlers
+  }
 
 -- | Info needed to connect and authenticate in Asterisk
 data ConnectInfo = ConnectInfo {
-  ciHost :: String,
-  ciPort :: Int,
-  ciUsername :: B.ByteString,
-  ciSecret :: B.ByteString }
-  deriving (Eq, Show)
+    ciHost :: String           -- ^ Host with Asterisk server (e.g. `localhost')
+  , ciPort :: Int              -- ^ Port of Asterisk server (usually 5038)
+  , ciUsername :: B.ByteString -- ^ Username
+  , ciSecret :: B.ByteString   -- ^ Secret
+  } deriving (Eq, Show)
 
 -- | The AMI monad
 type AMI a = ReaderT (TVar AMIState) IO a
@@ -76,17 +77,20 @@ type AMI a = ReaderT (TVar AMIState) IO a
 packID :: ActionID -> B.ByteString
 packID i = B.pack (show i)
 
+-- | Sort-of Control.Monad.State.gets
 getAMI :: (AMIState -> a) -> AMI a
 getAMI fn = do
   var <- ask
   st <- liftIO $ atomically $ readTVar var
   return (fn st)
 
+-- | Sort-of Control.Monad.State.put
 putAMI :: AMIState -> AMI ()
 putAMI st = do
   var <- ask
   liftIO $ atomically $ writeTVar var st
 
+-- | Sort-of Control.Monad.State.modify
 modifyAMI :: (AMIState -> AMIState) -> AMI ()
 modifyAMI fn = do
   st <- getAMI id
