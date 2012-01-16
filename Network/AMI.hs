@@ -1,6 +1,10 @@
 {-# LANGUAGE OverloadedStrings, BangPatterns #-}
 module Network.AMI
-  (Parameters,
+  (-- * Usage
+   -- $usage
+
+   -- * Types
+   Parameters,
    ActionType, EventType,
    ActionID, ResponseType,
    EventHandler,
@@ -9,6 +13,7 @@ module Network.AMI
    Response (..),
    Event (..),
    ConnectInfo (..),
+   -- * Functions
    withAMI, withAMI_MD5,
    query,
    handleEvent
@@ -29,6 +34,35 @@ import System.IO.Unsafe (unsafePerformIO)
 import Network
 import Network.Socket
 import System.IO
+
+{- $usage
+ 
+> import Network.AMI
+> 
+> info :: ConnectInfo
+> info = ConnectInfo {
+>          ciHost = "localhost"
+>        , ciPort = 5038
+>        , ciUsername = "admin"
+>        , ciSecret = "PASSWORD" }
+> 
+> main :: IO ()
+> main = withAMI_MD5 info $ do
+>   handleEvent "FullyBooted" onBooted
+>   mail <- query "MailboxCount" [("Mailbox","900")]
+>   liftIO $ print mail
+>   jabber <- query "JabberSend" [("Jabber", "asterisk"),
+>                          ("JID", "someone@example.com"),
+>                          ("ScreenName", "asterisk"),
+>                          ("Message", "Jabber via AMI")]
+>   liftIO $ print jabber
+> 
+> onBooted :: EventHandler
+> onBooted ps = liftIO $ do
+>   putStrLn "Asterisk is fully booted."
+>   print ps
+ 
+ -}
 
 -- | Action or response or event parameters
 type Parameters = [(B.ByteString, B.ByteString)]
@@ -118,7 +152,13 @@ handleEvent t handler = modifyAMI add
   where
     add st = st {amiEventHandlers = M.insert t handler (amiEventHandlers st)}
 
--- | Send an Action packet and return the response
+-- | Send an Action packet and return the response.
+--
+-- CAUTION: the response value should be evaluated in order
+-- to be removed from internal responses queue. Leaving
+-- response value un-evaluated (e.g. unused) will cause
+-- memory leak.
+--
 query :: ActionType -> Parameters -> AMI Response
 query t ps = do
   i <- inc

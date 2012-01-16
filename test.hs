@@ -8,7 +8,7 @@ info = ConnectInfo {
          ciHost = "localhost",
          ciPort = 5038,
          ciUsername = "monitor",
-         ciSecret = "M%nit%r" }
+         ciSecret = "PASSWORD" }
 
 main = do
   forkIO test
