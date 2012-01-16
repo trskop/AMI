@@ -4,7 +4,10 @@ module Network.AMI
    ActionType, EventType,
    ActionID, ResponseType,
    EventHandler,
-   Packet (..),
+   AMI,
+   Action (..),
+   Response (..),
+   Event (..),
    ConnectInfo (..),
    withAMI, withAMI_MD5,
    query,
@@ -27,6 +30,7 @@ import Network
 import Network.Socket
 import System.IO
 
+-- | Action or response or event parameters
 type Parameters = [(B.ByteString, B.ByteString)]
 
 type ActionType = B.ByteString
@@ -39,17 +43,23 @@ type ResponseType = B.ByteString
 
 type EventHandler = Parameters -> IO ()
 
--- | Any AMI packet
-data Packet =
-    Action ActionID ActionType Parameters
-  | Response ActionID ResponseType Parameters [B.ByteString]
-  | Event EventType Parameters
+-- | Action packet (sent to Asterisk)
+data Action = Action ActionID ActionType Parameters
   deriving (Eq, Show)
 
+-- | Response packet (received from Asterisk)
+data Response = Response ActionID ResponseType Parameters [B.ByteString]
+  deriving (Eq, Show)
+
+-- | Event packet (received from Asterisk)
+data Event = Event EventType Parameters
+  deriving (Eq, Show)
+
+-- | AMI monad internal state
 data AMIState = AMIState {
   amiHandle :: Maybe Handle,
   amiActionID :: ActionID,
-  amiResponses :: M.Map ActionID (Maybe Packet),
+  amiResponses :: M.Map ActionID (Maybe Response),
   amiEventHandlers :: M.Map EventType EventHandler }
 
 -- | Info needed to connect and authenticate in Asterisk
@@ -104,8 +114,8 @@ handleEvent t handler = modifyAMI add
   where
     add st = st {amiEventHandlers = M.insert t handler (amiEventHandlers st)}
 
--- | Send an Action packet and install a handler for the anser
-query :: ActionType -> Parameters -> AMI Packet
+-- | Send an Action packet and return the response
+query :: ActionType -> Parameters -> AMI Response
 query t ps = do
   i <- inc
   var <- ask
@@ -186,7 +196,7 @@ withAMI_MD5 info ami = runAMI $ do
     return r
 
 -- | Send one AMI packet
-sendPacket :: Handle -> Packet -> IO ()
+sendPacket :: Handle -> Action -> IO ()
 sendPacket h p = do
   let s = format p `B.append` "\r\n"
   B.hPutStr h s
@@ -211,8 +221,7 @@ readUntilEmptyLine h = do
 forkAnswersReader :: Handle -> AMI ThreadId
 forkAnswersReader h = do
     var <- ask
-    liftIO $ forkIO $ do
-      forever $ reader h var
+    liftIO $ forkIO (forever $ reader h var)
   where
     reader :: Handle -> TVar AMIState -> IO ()
     reader h var = do
@@ -221,12 +230,12 @@ forkAnswersReader h = do
         Left err -> do
                     putStrLn $ "Error parsing answer: " ++ err
                     return ()
-        Right p@(Response i _ _ _) -> do
+        Right (Right p@(Response i _ _ _)) -> do
           atomically $ do
             st <- readTVar var
             let resps = M.insert i (Just p) (amiResponses st)
             writeTVar var $ st {amiResponses = resps}
-        Right p@(Event t ps) -> do
+        Right (Left p@(Event t ps)) -> do
             st <- atomically $ readTVar var
             case M.lookup t (amiEventHandlers st) of
               Nothing -> return ()
@@ -235,8 +244,7 @@ forkAnswersReader h = do
 linesB y = h : if B.null t then [] else linesB (B.drop 2 t)
    where (h,t) = B.breakSubstring "\r\n" y
 
--- | Parse packet
-parse :: B.ByteString -> Either String Packet
+parse :: B.ByteString -> Either String (Either Event Response)
 parse str = uncurry toPacket =<< (toPairs [] $ B.split '\r' str)
   where
     toPairs :: Parameters -> [B.ByteString] -> Either String (Parameters, [B.ByteString])
@@ -249,14 +257,13 @@ parse str = uncurry toPacket =<< (toPairs [] $ B.split '\r' str)
                   in  toPairs (acc ++ [new]) ss
         x      -> Right (acc, (s:ss))
 
-    toPacket :: Parameters -> [B.ByteString] -> Either String Packet
-    toPacket [] text = Right $ Response 0 "text" [] text
+    toPacket :: Parameters -> [B.ByteString] -> Either String (Either Event Response)
+    toPacket [] text = Right $ Right $ Response 0 "text" [] text
     toPacket ((k,v):pairs) text =
       case k of
-        "Action"   -> toAction   v pairs
         "Response" -> toResponse v pairs text
         "Event"    -> toEvent    v pairs
-        _          -> Left $ "Invalid first parameter: " ++ show v
+        _          -> Left  $ "Invalid first parameter: " ++ show v
 
     getField :: B.ByteString -> Parameters -> Either String (B.ByteString, Parameters)
     getField x ps = go x [] ps
@@ -266,21 +273,15 @@ parse str = uncurry toPacket =<< (toPairs [] $ B.split '\r' str)
       | x == k    = Right (v, acc ++ rest)
       | otherwise = go x ((k,v):acc) rest
 
-    toAction name pairs = do
-      (i, ps) <- getField "ActionID" pairs
-      return $ Action (read $ B.unpack i) name ps
-
     toResponse name pairs text = do
       (i, ps) <- getField "ActionID" pairs
-      return $ Response (read $ B.unpack i) name ps text
+      return $ Right $ Response (read $ B.unpack i) name ps text
 
-    toEvent name pairs = Right $ Event name pairs
+    toEvent name pairs = Right $ Left $ Event name pairs
 
-format :: Packet -> B.ByteString
-format (Action i name ps)   = formatParams $ [("Action", name), ("ActionID", packID i)] ++ ps
-format (Response i name ps text) =
-    formatParams ([("Response", name), ("ActionID", packID i)] ++ ps) `B.append` "\r\n" `B.append` B.intercalate "\r\n" text
-format (Event name ps)      = formatParams $ [("Event", name)] ++ ps
+format :: Action -> B.ByteString
+format (Action i name ps) =
+    formatParams $ [("Action", name), ("ActionID", packID i)] ++ ps
 
 formatParams :: Parameters -> B.ByteString
 formatParams pairs = B.intercalate "\r\n" $ map one pairs
