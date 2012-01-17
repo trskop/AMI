@@ -2,6 +2,7 @@
 import Control.Monad
 import Control.Monad.Trans
 import Control.Concurrent
+import Control.Concurrent.STM
 
 import Network.AMI
 
@@ -26,7 +27,8 @@ test = withAMI_MD5 info $ do
                            ("Message", "Jabber via AMI")]
   liftIO $ print jabber
   ok <- query "SipPeers" []
-  list <- waitListEvents "PeerEntry" "PeerlistComplete" (return)
+  var <- listEvents "PeerEntry" "PeerlistComplete" (return)
+  list <- liftIO $ atomically $ takeTMVar var
   forM_ list $ \peer -> liftIO $ print peer
   liftIO $ print ok
 
